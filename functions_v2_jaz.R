@@ -6,7 +6,7 @@ library(dplyr)
 library(ggplot2)
 library(gridExtra)
 library(grid)
-
+aa
 
 # Here this is still manual
 MEDITS_data <- read.csv("~/Dropbox/2023_MapComparisonPackage_FishMIP/00input/MEDITS_data/Abundancia_biomasa_GSA1_2_6.csv")
