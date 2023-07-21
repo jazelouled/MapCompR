@@ -11,6 +11,10 @@ aa
 # Here this is still manual
 MEDITS_data <- read.csv("~/Dropbox/2023_MapComparisonPackage_FishMIP/00input/MEDITS_data/Abundancia_biomasa_GSA1_2_6.csv")
 MEDITS_data_ <- MEDITS_data[MEDITS_data$ESPECIE %like% "Engraulis encrasicolus",]
+
+MEDITS_data_$longitud <- rowMeans(MEDITS_data_[, c("LONGITUD_INI", "LONGITUD_VIR")])
+MEDITS_data_$latitud <- rowMeans(MEDITS_data_[, c("X.LATITUD_INI", "LATITUD_VIR")])
+
 # MEDITS_data_ <- MEDITS_data[MEDITS_data$ESPECIE %like% "Sardina pilchardus",]
 Ecospace_data <- dir("~/Dropbox/2023_MapComparisonPackage_FishMIP/00input/asc/", pattern = "Adult anchovy", full.names = T)
 # Ecospace_data <- dir("~/Dropbox/2023_MapComparisonPackage_FishMIP/00input/asc/", pattern = "Adult sardine", full.names = T)
@@ -52,7 +56,7 @@ obsInPred <- function(observed, observedLon, observedLat, predicted){
   return(xy_intersect_)
 }
 
-observed <- obsInPred(MEDITS_data_, observedLon = "LONGITUD_VIR", observedLat = "LATITUD_VIR", Ecospace_data)
+system.time(observed <- obsInPred(MEDITS_data_, observedLon = "longitud", observedLat = "latitud", Ecospace_data))
 
 
 # Version 2
@@ -85,15 +89,6 @@ observed <- obsInPred(observed = MEDITS_data_,
                       predicted = Ecospace_data)
 
 
-# Version 3
-
-
-
-
-
-
-
-
 
 ####################
 # obsPresBiomassDF #
@@ -117,7 +112,7 @@ bathy <- raster(paste0(bathymetry, "/GEBCO_2014_2D.nc"))  # bathymetry: This we 
 
 
 
-obsPresBiomassDF <- function(observed, observedBiomass, predicted, rasterVariable){
+obsPresBiomassDF <- function(observed, observedLon, observedLat, observedBiomass, predicted, rasterVariable, bufferExtract){
   listExtract <- list()
   listExtract_ <- list()
   
@@ -135,14 +130,19 @@ obsPresBiomassDF <- function(observed, observedBiomass, predicted, rasterVariabl
 
     
     
-        for (i in 1:length(observed_$Lat)){
+        for (i in 1:length(observed_$Year)){
           print(i)
           columnInfo <- observed_[[observedBiomass]]
-          extracted_env <- raster::extract(predictedRaster_, cbind(observed_$Lon[i], observed_$Lat[i]), buffer=20000, fun=mean, na.rm=TRUE)  # extract data
-          extracted_rasterVariable <- raster::extract(rasterVariable, cbind(observed_$Lon[i], observed_$Lat[i]), buffer=20000, fun=mean, na.rm=TRUE)  # extract biomass data
+          observedLon_ <- observed_[[observedLon]]
+          observedLat_ <- observed_[[observedLat]]
+
+          bufferExtract <- bufferExtract*1000
+          
+          extracted_env <- raster::extract(predictedRaster_, cbind(observedLon_[i], observedLat_[i]), buffer=0, fun=mean, na.rm=TRUE)  # extract data
+          extracted_rasterVariable <- raster::extract(rasterVariable, cbind(observedLon_[i], observedLat_[i]), bufferExtract=bufferExtract, fun=mean, na.rm=TRUE)  # extract biomass data
           df_predObs <- data.frame("longitude" = numeric(), "latitude" = numeric(), "biomass_observed" = numeric(), "biomass_predicted" = numeric(), "year" = numeric(), "variable" = numeric())
-          df_predObs[1,1] <- observed_$Lon[i]
-          df_predObs[1,2] <- observed_$Lat[i]
+          df_predObs[1,1] <- observedLon_[i]
+          df_predObs[1,2] <- observedLat_[i]
           df_predObs[1,3] <- columnInfo[i]
           df_predObs[1,4] <- extracted_env
           df_predObs[1,5] <- year
@@ -157,11 +157,14 @@ obsPresBiomassDF <- function(observed, observedBiomass, predicted, rasterVariabl
   
   DF_standardized <- do.call(rbind, listExtract_)
   
-  return(DF_standardized)
+  DF_standardized_ <- DF_standardized[complete.cases(DF_standardized),]
+  
+  
+  return(DF_standardized_)
   
 }
 
-hh <- obsPresBiomassDF(observed, observedBiomass = "BIOMASA", Ecospace_data, rasterVariable = bathy)
+hh <- obsPresBiomassDF(observed, observedLon = "longitud", observedLat = "latitud", observedBiomass = "BIOMASA", predicted = Ecospace_data, rasterVariable = bathy, bufferExtract = 20)
 
 
 
