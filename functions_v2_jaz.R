@@ -35,6 +35,8 @@ observed <- MEDITS_data_
 predicted <- Ecospace_data
 
 # Keep observations within predicted extent
+
+# Version 1
 obsInPred <- function(observed, observedLon, observedLat, predicted){
   predicted_data_mask <- raster(predicted[1])
   predicted_mask <- predicted_data_mask/predicted_data_mask
@@ -51,6 +53,46 @@ obsInPred <- function(observed, observedLon, observedLat, predicted){
 }
 
 observed <- obsInPred(MEDITS_data_, observedLon = "LONGITUD_VIR", observedLat = "LATITUD_VIR", Ecospace_data)
+
+
+# Version 2
+obsInPred <- function(observed, observedLon, observedLat, predicted){
+  # Polygons 
+  mask <- raster(predicted[1]) 
+  polygon <- rasterToPolygons(mask, dissolve = F)
+  sf_polygon <- st_as_sf(polygon)
+  boundary <- st_union(sf_polygon)
+  # Points 
+  points <- SpatialPoints(observed[,c(observedLon,observedLat)])
+  sf_points <- st_as_sf(points)
+  
+  # Intersect 
+  st_crs(sf_points) <- st_crs(boundary)
+  xy_intersect <- st_intersection(boundary, sf_points)
+  coordinates <- lapply(xy_intersect, function(point) st_coordinates(point))
+  xy_intersect_ <- do.call(rbind, coordinates)
+  colnames(xy_intersect_) <- c(observedLon, observedLat)
+  xy_intersect_ <- as.data.frame(xy_intersect_)
+  
+  # Joint the intersected 
+  observed_ <- semi_join(observed, xy_intersect_, by = c(observedLon, observedLat))
+  return(observed_)
+}
+
+observed <- obsInPred(observed = MEDITS_data_,
+                      observedLon = "longitud",
+                      observedLat = "latitud",
+                      predicted = Ecospace_data)
+
+
+# Version 3
+
+
+
+
+
+
+
 
 
 ####################
