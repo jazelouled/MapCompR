@@ -6,22 +6,22 @@ library(dplyr)
 library(ggplot2)
 library(gridExtra)
 library(grid)
-aa
 
-# Here this is still manual
+
+# Load observed data
 MEDITS_data <- read.csv("~/Dropbox/2023_MapComparisonPackage_FishMIP/00input/MEDITS_data/Abundancia_biomasa_GSA1_2_6.csv")
 MEDITS_data_ <- MEDITS_data[MEDITS_data$ESPECIE %like% "Engraulis encrasicolus",]
 
+# Mean lat lon
 MEDITS_data_$longitud <- rowMeans(MEDITS_data_[, c("LONGITUD_INI", "LONGITUD_VIR")])
 MEDITS_data_$latitud <- rowMeans(MEDITS_data_[, c("X.LATITUD_INI", "LATITUD_VIR")])
 
-# MEDITS_data_ <- MEDITS_data[MEDITS_data$ESPECIE %like% "Sardina pilchardus",]
+# Load predict data
 Ecospace_data <- dir("~/Dropbox/2023_MapComparisonPackage_FishMIP/00input/asc/", pattern = "Adult anchovy", full.names = T)
-# Ecospace_data <- dir("~/Dropbox/2023_MapComparisonPackage_FishMIP/00input/asc/", pattern = "Adult sardine", full.names = T)
 Ecospace_data <- Ecospace_data[Ecospace_data %like% "Biomass"]
 
 #############
-# obsInPred #
+# obsInPred # --> now implemented in obsPresBiomassDF with complete.cases
 #############
 
 # Keep only observed data within the extent of the predicted value by the  MEM --------
@@ -34,64 +34,61 @@ Ecospace_data <- Ecospace_data[Ecospace_data %like% "Biomass"]
 # observedLat: name of the column with latitude data
 # predicted: raster with the extent we want to work in. It is used to create a mask and delete
 #            the observed points out of the raster
-observed <- MEDITS_data_
-
-predicted <- Ecospace_data
 
 # Keep observations within predicted extent
 
 # Version 1
-obsInPred <- function(observed, observedLon, observedLat, predicted){
-  predicted_data_mask <- raster(predicted[1])
-  predicted_mask <- predicted_data_mask/predicted_data_mask
-  polygonDeletePoints <- rasterToPolygons(predicted_mask, dissolve = T)
-  polygonDeletePoints_ <- st_as_sf(polygonDeletePoints)
-  observedLon <- observedLon
-  observedLat <- observedLat
-  coordinatesAndAttributes <- sf::st_as_sf(observed, coords = c(observedLon, observedLat))
-  xysf <- st_as_sf(as.data.frame(observed), coords = c(observedLon, observedLat), crs = 4326)
-  xy_intersect <- st_intersection(polygonDeletePoints_, xysf)
-  xy_intersect_ <- tidyr::extract(xy_intersect, geometry, into = c('Lon', 'Lat'), '\\((.*),(.*)\\)', conv = T)
-  
-  return(xy_intersect_)
-}
-
-system.time(observed <- obsInPred(MEDITS_data_, observedLon = "longitud", observedLat = "latitud", Ecospace_data))
-
-
-# Version 2
-obsInPred <- function(observed, observedLon, observedLat, predicted){
-  # Polygons 
-  mask <- raster(predicted[1]) 
-  polygon <- rasterToPolygons(mask, dissolve = F)
-  sf_polygon <- st_as_sf(polygon)
-  boundary <- st_union(sf_polygon)
-  # Points 
-  points <- SpatialPoints(observed[,c(observedLon,observedLat)])
-  sf_points <- st_as_sf(points)
-  
-  # Intersect 
-  st_crs(sf_points) <- st_crs(boundary)
-  xy_intersect <- st_intersection(boundary, sf_points)
-  coordinates <- lapply(xy_intersect, function(point) st_coordinates(point))
-  xy_intersect_ <- do.call(rbind, coordinates)
-  colnames(xy_intersect_) <- c(observedLon, observedLat)
-  xy_intersect_ <- as.data.frame(xy_intersect_)
-  
-  # Joint the intersected 
-  observed_ <- semi_join(observed, xy_intersect_, by = c(observedLon, observedLat))
-  return(observed_)
-}
-
-observed <- obsInPred(observed = MEDITS_data_,
-                      observedLon = "longitud",
-                      observedLat = "latitud",
-                      predicted = Ecospace_data)
-
+# obsInPred <- function(observed, observedLon, observedLat, predicted){
+#   predicted_data_mask <- raster(predicted[1])
+#   predicted_mask <- predicted_data_mask/predicted_data_mask
+#   polygonDeletePoints <- rasterToPolygons(predicted_mask, dissolve = T)
+#   polygonDeletePoints_ <- st_as_sf(polygonDeletePoints)
+#   observedLon <- observedLon
+#   observedLat <- observedLat
+#   coordinatesAndAttributes <- sf::st_as_sf(observed, coords = c(observedLon, observedLat))
+#   xysf <- st_as_sf(as.data.frame(observed), coords = c(observedLon, observedLat), crs = 4326)
+#   xy_intersect <- st_intersection(polygonDeletePoints_, xysf)
+#   xy_intersect_ <- tidyr::extract(xy_intersect, geometry, into = c('Lon', 'Lat'), '\\((.*),(.*)\\)', conv = T)
+#   
+#   return(xy_intersect_)
+# }
+# 
+# system.time(observed <- obsInPred(MEDITS_data_, observedLon = "longitud", observedLat = "latitud", Ecospace_data))
+# 
+# 
+# # Version 2
+# obsInPred <- function(observed, observedLon, observedLat, predicted){
+#   # Polygons 
+#   mask <- raster(predicted[1]) 
+#   polygon <- rasterToPolygons(mask, dissolve = F)
+#   sf_polygon <- st_as_sf(polygon)
+#   boundary <- st_union(sf_polygon)
+#   # Points 
+#   points <- SpatialPoints(observed[,c(observedLon,observedLat)])
+#   sf_points <- st_as_sf(points)
+#   
+#   # Intersect 
+#   st_crs(sf_points) <- st_crs(boundary)
+#   xy_intersect <- st_intersection(boundary, sf_points)
+#   coordinates <- lapply(xy_intersect, function(point) st_coordinates(point))
+#   xy_intersect_ <- do.call(rbind, coordinates)
+#   colnames(xy_intersect_) <- c(observedLon, observedLat)
+#   xy_intersect_ <- as.data.frame(xy_intersect_)
+#   
+#   # Joint the intersected 
+#   observed_ <- semi_join(observed, xy_intersect_, by = c(observedLon, observedLat))
+#   return(observed_)
+# }
+# 
+# observed <- obsInPred(observed = MEDITS_data_,
+#                       observedLon = "longitud",
+#                       observedLat = "latitud",
+#                       predicted = Ecospace_data)
+# 
 
 
 ####################
-# obsPresBiomassDF #
+# obsPresBiomassDF # 
 ####################
 
 # Put data frame in the format we need for comparison ---------------------
@@ -102,15 +99,15 @@ observed <- obsInPred(observed = MEDITS_data_,
 
 # The function has three arguments: 
 # observed: data frame obtained with the obsInPred function --> need to change this argument's name
+# observedLon: name of the longitude column
+# ObservedLat: name of the latitude column
 # observedBiomass: name of the biomass column
-# predicted: vector of paths to the MEM prediction we want to work with. 
-# Afegir argument raster
-
+# predicted: vector of paths to the MEM prediction we want to work with
+# rasterVariable: an extra variable (a raster; e.g. bathymetry to make visualizations later, like biomass vs. depth)
+# bufferExtract: buffer (in km that we want to use to make the extractions)
 
 bathymetry <-"~/Dropbox/2022_SouthHemisphere_SDM/bathymetry/"
-bathy <- raster(paste0(bathymetry, "/GEBCO_2014_2D.nc"))  # bathymetry: This we have to check how to put it online so it is downloaded with the package
-
-
+bathy <- raster(paste0(bathymetry, "/GEBCO_2014_2D.nc"))  
 
 obsPresBiomassDF <- function(observed, observedLon, observedLat, observedBiomass, predicted, rasterVariable, bufferExtract){
   listExtract <- list()
@@ -128,16 +125,12 @@ obsPresBiomassDF <- function(observed, observedLon, observedLat, observedBiomass
     year <- year(date)
     observed_ <- observed[observed$Year %like% year,]
 
-    
-    
         for (i in 1:length(observed_$Year)){
           print(i)
           columnInfo <- observed_[[observedBiomass]]
           observedLon_ <- observed_[[observedLon]]
           observedLat_ <- observed_[[observedLat]]
-
           bufferExtract <- bufferExtract*1000
-          
           extracted_env <- raster::extract(predictedRaster_, cbind(observedLon_[i], observedLat_[i]), buffer=0, fun=mean, na.rm=TRUE)  # extract data
           extracted_rasterVariable <- raster::extract(rasterVariable, cbind(observedLon_[i], observedLat_[i]), bufferExtract=bufferExtract, fun=mean, na.rm=TRUE)  # extract biomass data
           df_predObs <- data.frame("longitude" = numeric(), "latitude" = numeric(), "biomass_observed" = numeric(), "biomass_predicted" = numeric(), "year" = numeric(), "variable" = numeric())
@@ -156,15 +149,12 @@ obsPresBiomassDF <- function(observed, observedLon, observedLat, observedBiomass
   }
   
   DF_standardized <- do.call(rbind, listExtract_)
-  
   DF_standardized_ <- DF_standardized[complete.cases(DF_standardized),]
-  
-  
-  return(DF_standardized_)
-  
-}
+    return(DF_standardized_)
 
-hh <- obsPresBiomassDF(observed, observedLon = "longitud", observedLat = "latitud", observedBiomass = "BIOMASA", predicted = Ecospace_data, rasterVariable = bathy, bufferExtract = 20)
+  }
+
+hh <- obsPresBiomassDF(observed = MEDITS_data_, observedLon = "longitud", observedLat = "latitud", observedBiomass = "BIOMASA", predicted = Ecospace_data, rasterVariable = bathy, bufferExtract = 20)
 
 
 
@@ -225,7 +215,7 @@ visual_inspection <- function(df, observed, predicted, year, depth){
   
 }
 
-visual_inspection(hh, biomass_observed, biomass_predicted, year, depth) 
+visual_inspection(hh, biomass_observed, biomass_predicted, year, variable) 
 
 
 
